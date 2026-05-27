@@ -158,7 +158,7 @@ export default function HRSystem() {
     setSubmitting(true);
     setSubmitError("");
     try {
-      await addDoc(collection(db,"responses"),{
+      const data = {
         id:genId(), timestamp:Date.now(), anonimo,
         nome:anonimo?"Anônimo":fd.nome,
         setor:fd.setor, loja:fd.loja, cargo:fd.cargo, gestorNome:fd.gestorNome,
@@ -168,11 +168,17 @@ export default function HRSystem() {
         ratings:fd.ratings, gestorAv:fd.gestorAv,
         voltaria:fd.voltaria, recomendaria:fd.recomendaria,
         abertas:{ab1:fd.ab1,ab2:fd.ab2,ab3:fd.ab3,ab4:fd.ab4}
-      });
+      };
+      const timeout = new Promise((_,reject)=>setTimeout(()=>reject(new Error("timeout")),10000));
+      await Promise.race([addDoc(collection(db,"responses"),data), timeout]);
       setView("thanks");
     } catch(e){
-      console.error(e);
-      setSubmitError("Erro ao enviar. Verifique sua conexão e tente novamente.");
+      console.error("Erro ao enviar:",e);
+      if(e.message==="timeout"){
+        setSubmitError("Tempo esgotado. Verifique sua conexão com a internet e tente novamente.");
+      } else {
+        setSubmitError(`Erro ao enviar: ${e.message}. Verifique sua conexão e tente novamente.`);
+      }
     }
     setSubmitting(false);
   };
