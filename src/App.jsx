@@ -9,20 +9,17 @@ import {
   Home, FileText, Bell, Zap, Shield, EyeOff, Eye, RefreshCw, Download
 } from "lucide-react";
 import { db } from "./firebase.js";
-import {
-  collection, addDoc, onSnapshot, deleteDoc, getDocs
-} from "firebase/firestore";
+import { collection, addDoc, onSnapshot, deleteDoc, getDocs } from "firebase/firestore";
 
-// ─── CONSTANTES ───────────────────────────────────────────────────────────────
-const LOJAS = ["Loja Centro","Loja Sul","Loja Norte","Loja Leste","Loja Oeste","CD Central","Administrativo"];
-const TIPOS  = ["Pedido de demissão","Desligamento pela empresa","Término de contrato","Experiência","Acordo","Outros"];
+const LOJAS   = ["CTC", "LOJA", "CD"];
+const TIPOS   = ["Pedido de demissão","Desligamento pela empresa","Término de contrato","Experiência","Acordo","Outros"];
 const MOTIVOS = ["Salário incompatível","Benefícios insatisfatórios","Falta de crescimento","Problemas com liderança","Clima da equipe","Sobrecarga de trabalho","Escala ou horário","Nova proposta recebida","Mudança pessoal/familiar","Saúde emocional","Cultura da empresa","Falta de reconhecimento","Outro"];
 const RATINGS = ["Relacionamento c/ Gestor","Clima da equipe","Comunicação","Oportunidade de crescimento","Reconhecimento","Equilíbrio vida/trabalho","Treinamentos","Remuneração","Benefícios","Organização da operação"];
 const GESTOR_Q = ["Dava feedback frequente","Tratava equipe com respeito","Reconhecia bons resultados","Sabia ouvir a equipe","Era acessível","Era coerente nas decisões","Desenvolvia pessoas","Tinha boa comunicação","Sabia resolver conflitos","Demonstrava preparo para liderar"];
 const RC   = {1:"#EF4444",2:"#F97316",3:"#F59E0B",4:"#84CC16",5:"#22C55E"};
 const RLBL = ["","Muito ruim","Ruim","Regular","Bom","Ótimo"];
+const INP  = "w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all";
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
 const genId = () => Math.random().toString(36).substr(2,9);
 const avg   = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
 
@@ -30,12 +27,12 @@ function genSamples() {
   const now = Date.now();
   return Array.from({length:30},(_,i)=>{
     const loja = LOJAS[Math.floor(Math.random()*LOJAS.length)];
-    const risk = loja.includes("Sul")?0.7:loja.includes("Norte")?1.3:1;
+    const risk = loja==="CD"?0.7:loja==="CTC"?1.3:1;
     const ratings={}, gestorAv={};
     RATINGS.forEach((_,j)  =>{ ratings[j]  = Math.max(1,Math.min(5,Math.round(2.5*risk+(Math.random()-0.5)*2))); });
     GESTOR_Q.forEach((_,j) =>{ const v=Math.random(); gestorAv[j]=v>0.55?"Sim":v>0.3?"Parcialmente":"Não"; });
     return { id:genId(), timestamp:now-Math.floor(Math.random()*150)*86400000,
-      anonimo:Math.random()>0.5, nome:"Colaborador "+(i+1), loja,
+      anonimo:Math.random()>0.5, nome:"Colaborador "+(i+1), loja, setor:"Setor "+(i%5+1),
       tipo:TIPOS[Math.floor(Math.random()*3)], motivo:MOTIVOS[Math.floor(Math.random()*MOTIVOS.length)],
       ratings, gestorAv,
       voltaria:Math.random()>0.5?"Sim":Math.random()>0.5?"Talvez":"Não",
@@ -100,82 +97,88 @@ function calcStats(responses) {
     voltariaPct:Math.round(voltaria/n*100), recomendariaPct:Math.round(recomendaria/n*100)};
 }
 
-// ─── EXPORTAR CSV ─────────────────────────────────────────────────────────────
 function exportToCSV(responses) {
-  const header = ["ID","Data","Anônimo","Nome","Loja","Cargo","Gestor","Tipo","Motivo",
+  const header = ["ID","Data","Anônimo","Nome","Setor","Loja","Cargo","Gestor","Tipo","Tipo (Outros)","Motivo","Motivo (Outros)",
     ...RATINGS.map(r=>`Nota: ${r}`),"Média Notas",
     ...GESTOR_Q.map(q=>`Gestor: ${q}`),"Voltaria","Recomendaria",
     "Ab: Retenção","Ab: Melhor Ponto","Ab: Principal Problema","Ab: Comentários"];
   const rows = responses.map(r=>{
     const notas = RATINGS.map((_,i)=>r.ratings?.[i]||"");
-    const mediaNotas = notas.filter(v=>v>0).length ? (notas.filter(v=>v>0).reduce((a,b)=>a+b,0)/notas.filter(v=>v>0).length).toFixed(2) : "";
-    const gestor = GESTOR_Q.map((_,i)=>r.gestorAv?.[i]||"");
-    return [r.id, new Date(r.timestamp).toLocaleDateString("pt-BR"),
-      r.anonimo?"Sim":"Não", r.nome||"", r.loja||"", r.cargo||"", r.gestorNome||"",
-      r.tipo||"", r.motivo||"", ...notas, mediaNotas, ...gestor,
-      r.voltaria||"", r.recomendaria||"",
-      r.abertas?.ab1||"", r.abertas?.ab2||"", r.abertas?.ab3||"", r.abertas?.ab4||""];
+    const mediaNotas = notas.filter(v=>v>0).length?(notas.filter(v=>v>0).reduce((a,b)=>a+b)/notas.filter(v=>v>0).length).toFixed(2):"";
+    return [r.id,new Date(r.timestamp).toLocaleDateString("pt-BR"),r.anonimo?"Sim":"Não",
+      r.nome||"",r.setor||"",r.loja||"",r.cargo||"",r.gestorNome||"",
+      r.tipo||"",r.tipoOutros||"",r.motivo||"",r.motivoOutros||"",
+      ...notas,mediaNotas,...GESTOR_Q.map((_,i)=>r.gestorAv?.[i]||""),
+      r.voltaria||"",r.recomendaria||"",
+      r.abertas?.ab1||"",r.abertas?.ab2||"",r.abertas?.ab3||"",r.abertas?.ab4||""];
   });
-  const csv = [header, ...rows].map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
-  const blob = new Blob(["\uFEFF"+csv], {type:"text/csv;charset=utf-8;"});
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href     = url;
-  a.download = `Desligamentos_Constance_${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
+  const csv=[header,...rows].map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download=`Desligamentos_Constance_${new Date().toISOString().slice(0,10)}.csv`; a.click();
   URL.revokeObjectURL(url);
 }
 
-const EMPTY_FD = {nome:"",matricula:"",loja:"",cargo:"",gestorNome:"",dtAdm:"",dtDesl:"",
-  tipo:"",motivo:"",ratings:{},gestorAv:{},ab1:"",ab2:"",ab3:"",ab4:"",voltaria:"",recomendaria:""};
+const EMPTY_FD = {
+  nome:"",setor:"",loja:"",cargo:"",gestorNome:"",dtAdm:"",dtDesl:"",
+  tipo:"",tipoOutros:"",motivo:"",motivoOutros:"",
+  ratings:{},gestorAv:{},ab1:"",ab2:"",ab3:"",ab4:"",voltaria:"",recomendaria:""
+};
 
-// ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
 export default function HRSystem() {
-  const [view,setView]               = useState("home");
-  const [responses,setResponses]     = useState([]);
-  const [loading,setLoading]         = useState(true);
-  const [step,setStep]               = useState(0);
-  const [anonimo,setAnonimo]         = useState(false);
-  const [fd,setFd]                   = useState(EMPTY_FD);
-  const [dashTab,setDashTab]         = useState("exec");
-  const [actionPlan,setActionPlan]   = useState("");
-  const [loadingAI,setLoadingAI]     = useState(false);
-  const [alertsOpen,setAlertsOpen]   = useState(false);
+  const [view,setView]             = useState("home");
+  const [responses,setResponses]   = useState([]);
+  const [loading,setLoading]       = useState(true);
+  const [step,setStep]             = useState(0);
+  const [anonimo,setAnonimo]       = useState(false);
+  const [fd,setFd]                 = useState(EMPTY_FD);
+  const [dashTab,setDashTab]       = useState("exec");
+  const [actionPlan,setActionPlan] = useState("");
+  const [loadingAI,setLoadingAI]   = useState(false);
+  const [alertsOpen,setAlertsOpen] = useState(false);
   const [expandedStore,setExpandedStore] = useState(null);
-  const [dbError,setDbError]         = useState(false);
+  const [dbError,setDbError]       = useState(false);
+  const [submitError,setSubmitError] = useState("");
+  const [submitting,setSubmitting] = useState(false);
 
-  // Escuta em tempo real o Firestore
   useEffect(()=>{
     const unsub = onSnapshot(collection(db,"responses"),
-      snap => { setResponses(snap.docs.map(d=>({...d.data(),_docId:d.id}))); setLoading(false); },
-      err  => { console.error(err); setDbError(true); setLoading(false); }
+      snap=>{ setResponses(snap.docs.map(d=>({...d.data(),_docId:d.id}))); setLoading(false); },
+      err =>{ console.error(err); setDbError(true); setLoading(false); }
     );
-    return () => unsub();
+    return ()=>unsub();
   },[]);
 
-  const saveResponse  = async(resp) => { await addDoc(collection(db,"responses"), resp); };
-  const loadSamples   = async()     => { const s=genSamples(); await Promise.all(s.map(x=>addDoc(collection(db,"responses"),x))); };
-  const clearAllData  = async()     => {
-    if(!confirm("Apagar TODOS os dados? Esta ação não pode ser desfeita.")) return;
-    const snap = await getDocs(collection(db,"responses"));
-    await Promise.all(snap.docs.map(d=>deleteDoc(d.ref)));
-  };
-
-  const up  = (k,v)=>setFd(p=>({...p,[k]:v}));
-  const upR = (i,v)=>setFd(p=>({...p,ratings:{...p.ratings,[i]:v}}));
-  const upG = (i,v)=>setFd(p=>({...p,gestorAv:{...p.gestorAv,[i]:v}}));
+  const up  = (k,v) => setFd(p=>({...p,[k]:v}));
+  const upR = (i,v) => setFd(p=>({...p,ratings:{...p.ratings,[i]:v}}));
+  const upG = (i,v) => setFd(p=>({...p,gestorAv:{...p.gestorAv,[i]:v}}));
 
   const handleSubmit = async()=>{
-    await saveResponse({
-      id:genId(), timestamp:Date.now(), anonimo, nome:anonimo?"Anônimo":fd.nome,
-      matricula:anonimo?"":fd.matricula, loja:fd.loja, cargo:fd.cargo,
-      gestorNome:fd.gestorNome, dtAdm:fd.dtAdm, dtDesl:fd.dtDesl,
-      tipo:fd.tipo, motivo:fd.motivo, ratings:fd.ratings, gestorAv:fd.gestorAv,
-      voltaria:fd.voltaria, recomendaria:fd.recomendaria,
-      abertas:{ab1:fd.ab1,ab2:fd.ab2,ab3:fd.ab3,ab4:fd.ab4}
-    });
-    setView("thanks");
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      await addDoc(collection(db,"responses"),{
+        id:genId(), timestamp:Date.now(), anonimo,
+        nome:anonimo?"Anônimo":fd.nome,
+        setor:fd.setor, loja:fd.loja, cargo:fd.cargo, gestorNome:fd.gestorNome,
+        dtAdm:fd.dtAdm, dtDesl:fd.dtDesl,
+        tipo:fd.tipo, tipoOutros:fd.tipoOutros,
+        motivo:fd.motivo, motivoOutros:fd.motivoOutros,
+        ratings:fd.ratings, gestorAv:fd.gestorAv,
+        voltaria:fd.voltaria, recomendaria:fd.recomendaria,
+        abertas:{ab1:fd.ab1,ab2:fd.ab2,ab3:fd.ab3,ab4:fd.ab4}
+      });
+      setView("thanks");
+    } catch(e){
+      console.error(e);
+      setSubmitError("Erro ao enviar. Verifique sua conexão e tente novamente.");
+    }
+    setSubmitting(false);
   };
+
+  const loadSamples  = async()=>{ await Promise.all(genSamples().map(x=>addDoc(collection(db,"responses"),x))); };
+  const clearAllData = async()=>{ if(!confirm("Apagar TODOS os dados?")) return; const snap=await getDocs(collection(db,"responses")); await Promise.all(snap.docs.map(d=>deleteDoc(d.ref))); };
 
   const generateActionPlan = async()=>{
     if(!stats) return;
@@ -184,18 +187,17 @@ export default function HRSystem() {
       const criticals=stats.avgRatings.filter(r=>r.value>0&&r.value<3).map(r=>`${r.fullName} (${r.value}/5)`).join(", ")||"nenhuma";
       const r=await fetch("/api/generate-plan",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:
-          `Especialista em RH. Dados de desligamento:\n- Total: ${stats.n}\n- Voluntários: ${Math.round(stats.voluntary/stats.n*100)}%\n- Satisfação média: ${stats.overallAvg}/5\n- Áreas críticas (nota<3): ${criticals}\n- Top motivos: ${stats.motivoData.slice(0,3).map(m=>m.name).join(", ")}\n- Voltaria: ${stats.voltariaPct}% | Recomendaria: ${stats.recomendariaPct}%\n- Alertas: ${stats.alerts.map(a=>a.msg).join("; ")||"nenhum"}\n\nPlano de ação executivo:\n**AÇÕES IMEDIATAS (30 dias)** — 3 ações\n**MÉDIO PRAZO (60-90 dias)** — 3 ações\n**KPIs PARA MONITORAR** — 4 indicadores\n**PONTO MAIS URGENTE** — 1 alerta prioritário\n\nLinguagem executiva, bullet points.`
+          `Especialista em RH. Dados:\n- Total: ${stats.n}\n- Voluntários: ${Math.round(stats.voluntary/stats.n*100)}%\n- Satisfação: ${stats.overallAvg}/5\n- Críticos: ${criticals}\n- Top motivos: ${stats.motivoData.slice(0,3).map(m=>m.name).join(", ")}\n- Voltaria: ${stats.voltariaPct}%\n\nPlano executivo:\n**AÇÕES IMEDIATAS (30d)** — 3 ações\n**MÉDIO PRAZO (60-90d)** — 3 ações\n**KPIs** — 4 indicadores\n**URGENTE** — 1 ponto crítico`
         }]})});
       const d=await r.json();
       setActionPlan(d.content?.map(c=>c.text||"").join("")||"Erro ao gerar.");
-    } catch(e){ setActionPlan("Erro ao conectar. Verifique a ANTHROPIC_API_KEY no Vercel."); }
+    } catch(e){ setActionPlan("Erro ao conectar. Verifique a ANTHROPIC_API_KEY."); }
     setLoadingAI(false);
   };
 
   const stats = responses.length>0 ? calcStats(responses) : null;
   const STEPS = 7;
 
-  // ── LOADING / ERRO ──
   if(loading) return(
     <div className="min-h-screen bg-slate-900 flex items-center justify-center">
       <div className="text-center"><div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"/><div className="text-slate-400 text-sm">Conectando ao banco de dados...</div></div>
@@ -203,7 +205,7 @@ export default function HRSystem() {
   );
   if(dbError) return(
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
-      <div className="text-center max-w-sm"><AlertTriangle size={40} className="text-red-400 mx-auto mb-4"/><h2 className="text-white font-bold mb-2">Erro de conexão</h2><p className="text-slate-400 text-sm">Verifique as variáveis de ambiente do Firebase no Vercel e tente novamente.</p></div>
+      <div className="text-center max-w-sm"><AlertTriangle size={40} className="text-red-400 mx-auto mb-4"/><h2 className="text-white font-bold mb-2">Erro de conexão</h2><p className="text-slate-400 text-sm">Verifique as variáveis de ambiente do Firebase no Vercel.</p></div>
     </div>
   );
 
@@ -217,8 +219,8 @@ export default function HRSystem() {
           <p className="text-slate-500 text-sm">Formulários + Dashboard executivo em tempo real</p>
         </div>
         <div className="space-y-3 mb-10">
-          <button onClick={()=>{setView("form");setStep(0);setFd(EMPTY_FD);setAnonimo(false);}}
-            className="w-full py-4 px-5 rounded-2xl font-bold text-slate-900 flex items-center justify-between transition-all hover:scale-105 active:scale-100"
+          <button onClick={()=>{setView("form");setStep(0);setFd(EMPTY_FD);setAnonimo(false);setSubmitError("");}}
+            className="w-full py-4 px-5 rounded-2xl font-bold text-slate-900 flex items-center justify-between transition-all hover:scale-105"
             style={{background:"linear-gradient(135deg,#F59E0B,#D97706)"}}>
             <div className="flex items-center gap-3"><FileText size={20}/>
               <div className="text-left"><div className="text-base">Responder Formulário</div><div className="text-xs font-normal opacity-70">Entrevista de desligamento</div></div>
@@ -243,14 +245,13 @@ export default function HRSystem() {
 
   // ── FORMULÁRIO ──
   if(view==="form"){
-    const Label=({text})=><label className="text-xs font-bold text-slate-500 block mb-1 uppercase tracking-wide">{text}</label>;
-    const Inp=({k,...p})=><input className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" value={fd[k]} onChange={e=>up(k,e.target.value)} {...p}/>;
+    const lbl = "text-xs font-bold text-slate-500 block mb-1 uppercase tracking-wide";
     const steps=[
       // 0 Identificação
       <div key={0} className="space-y-4">
         <div><h2 className="text-xl font-bold text-slate-800 mb-1">Identificação</h2><p className="text-slate-500 text-sm">Suas informações ficam protegidas pelo RH.</p></div>
         <div className="flex items-center gap-3 bg-blue-50 p-3.5 rounded-xl border border-blue-100">
-          <button onClick={()=>setAnonimo(!anonimo)} className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${anonimo?"bg-blue-600":"bg-gray-300"}`}>
+          <button onClick={()=>setAnonimo(a=>!a)} className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${anonimo?"bg-blue-600":"bg-gray-300"}`}>
             <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${anonimo?"left-6":"left-1"}`}/>
           </button>
           <div>
@@ -258,35 +259,102 @@ export default function HRSystem() {
             <div className="text-xs text-slate-500">Ative para não vincular sua identidade</div>
           </div>
         </div>
-        {!anonimo&&<><div><Label text="Nome completo"/><Inp k="nome" placeholder="Seu nome completo"/></div>
-          <div className="grid grid-cols-2 gap-3"><div><Label text="Matrícula"/><Inp k="matricula" placeholder="Nº matrícula"/></div><div><Label text="Cargo"/><Inp k="cargo" placeholder="Seu cargo"/></div></div></>}
+        {!anonimo&&(
+          <div>
+            <label className={lbl}>Nome completo</label>
+            <input className={INP} value={fd.nome} onChange={e=>up("nome",e.target.value)} placeholder="Seu nome completo"/>
+          </div>
+        )}
+        <div>
+          <label className={lbl}>Setor</label>
+          <input className={INP} value={fd.setor} onChange={e=>up("setor",e.target.value)} placeholder="Ex: Vendas, Operações, Caixa..."/>
+        </div>
         <div className="grid grid-cols-2 gap-3">
-          <div><Label text="Unidade / Loja"/><select className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white" value={fd.loja} onChange={e=>up("loja",e.target.value)}><option value="">Selecione</option>{LOJAS.map(l=><option key={l}>{l}</option>)}</select></div>
-          <div><Label text="Gestor direto"/><Inp k="gestorNome" placeholder="Nome do gestor"/></div>
-          <div><Label text="Admissão"/><input type="date" className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" value={fd.dtAdm} onChange={e=>up("dtAdm",e.target.value)}/></div>
-          <div><Label text="Desligamento"/><input type="date" className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" value={fd.dtDesl} onChange={e=>up("dtDesl",e.target.value)}/></div>
+          <div>
+            <label className={lbl}>Cargo</label>
+            <input className={INP} value={fd.cargo} onChange={e=>up("cargo",e.target.value)} placeholder="Seu cargo"/>
+          </div>
+          <div>
+            <label className={lbl}>Gestor direto</label>
+            <input className={INP} value={fd.gestorNome} onChange={e=>up("gestorNome",e.target.value)} placeholder="Nome do gestor"/>
+          </div>
+        </div>
+        <div>
+          <label className={lbl}>Unidade / Loja</label>
+          <select className={INP+" bg-white"} value={fd.loja} onChange={e=>up("loja",e.target.value)}>
+            <option value="">Selecione</option>
+            {LOJAS.map(l=><option key={l}>{l}</option>)}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={lbl}>Data de admissão</label>
+            <input type="date" className={INP} value={fd.dtAdm} onChange={e=>up("dtAdm",e.target.value)}/>
+          </div>
+          <div>
+            <label className={lbl}>Data desligamento</label>
+            <input type="date" className={INP} value={fd.dtDesl} onChange={e=>up("dtDesl",e.target.value)}/>
+          </div>
         </div>
       </div>,
+
       // 1 Tipo e Motivo
       <div key={1} className="space-y-5">
         <div><h2 className="text-xl font-bold text-slate-800 mb-1">Tipo e Motivo</h2><p className="text-slate-500 text-sm">Selecione o que melhor descreve sua situação.</p></div>
-        <div><Label text="Tipo de desligamento"/><div className="grid gap-2">{TIPOS.map(t=><button key={t} onClick={()=>up("tipo",t)} className={`text-left px-4 py-2.5 rounded-xl border-2 text-sm transition-all ${fd.tipo===t?"border-blue-600 bg-blue-50 text-blue-700 font-semibold":"border-slate-200 text-slate-700 hover:border-blue-200"}`}>{t}</button>)}</div></div>
-        <div><Label text="Motivo principal"/><div className="grid gap-2">{MOTIVOS.map(m=><button key={m} onClick={()=>up("motivo",m)} className={`text-left px-4 py-2.5 rounded-xl border-2 text-sm transition-all ${fd.motivo===m?"border-amber-500 bg-amber-50 text-amber-700 font-semibold":"border-slate-200 text-slate-700 hover:border-amber-200"}`}>{m}</button>)}</div></div>
+        <div>
+          <label className={lbl}>Tipo de desligamento</label>
+          <div className="grid gap-2">
+            {TIPOS.map(t=>(
+              <button key={t} onClick={()=>up("tipo",t)}
+                className={`text-left px-4 py-2.5 rounded-xl border-2 text-sm transition-all ${fd.tipo===t?"border-blue-600 bg-blue-50 text-blue-700 font-semibold":"border-slate-200 text-slate-700 hover:border-blue-200"}`}>
+                {t}
+              </button>
+            ))}
+          </div>
+          {fd.tipo==="Outros"&&(
+            <div className="mt-2">
+              <label className={lbl}>Especifique o tipo</label>
+              <input className={INP} value={fd.tipoOutros} onChange={e=>up("tipoOutros",e.target.value)} placeholder="Descreva o tipo de desligamento..."/>
+            </div>
+          )}
+        </div>
+        <div>
+          <label className={lbl}>Motivo principal da saída</label>
+          <div className="grid gap-2">
+            {MOTIVOS.map(m=>(
+              <button key={m} onClick={()=>up("motivo",m)}
+                className={`text-left px-4 py-2.5 rounded-xl border-2 text-sm transition-all ${fd.motivo===m?"border-amber-500 bg-amber-50 text-amber-700 font-semibold":"border-slate-200 text-slate-700 hover:border-amber-200"}`}>
+                {m}
+              </button>
+            ))}
+          </div>
+          {fd.motivo==="Outro"&&(
+            <div className="mt-2">
+              <label className={lbl}>Especifique o motivo</label>
+              <input className={INP} value={fd.motivoOutros} onChange={e=>up("motivoOutros",e.target.value)} placeholder="Descreva o motivo..."/>
+            </div>
+          )}
+        </div>
       </div>,
+
       // 2 Avaliações 1-5
       <div key={2} className="space-y-4">
         <div><h2 className="text-xl font-bold text-slate-800 mb-1">Avaliação da Experiência</h2><p className="text-slate-500 text-sm">Avalie de <b>1</b> (muito ruim) a <b>5</b> (ótimo).</p></div>
         <div className="space-y-2.5">{RATINGS.map((label,i)=>(
           <div key={i} className="bg-slate-50 rounded-xl p-3.5 border border-slate-100">
             <div className="text-sm font-medium text-slate-700 mb-2.5">{label}</div>
-            <div className="flex items-center gap-2">{[1,2,3,4,5].map(v=>(
-              <button key={v} onClick={()=>upR(i,v)}
-                className={`w-9 h-9 rounded-full text-sm font-bold transition-all ${fd.ratings[i]===v?"text-white scale-110 shadow-md":"bg-white border-2 border-slate-200 text-slate-500 hover:border-slate-400"}`}
-                style={fd.ratings[i]===v?{backgroundColor:RC[v],borderColor:RC[v]}:{}}>{v}</button>
-            ))}{fd.ratings[i]&&<span className="text-xs ml-1 font-semibold" style={{color:RC[fd.ratings[i]]}}>{RLBL[fd.ratings[i]]}</span>}</div>
+            <div className="flex items-center gap-2">
+              {[1,2,3,4,5].map(v=>(
+                <button key={v} onClick={()=>upR(i,v)}
+                  className={`w-9 h-9 rounded-full text-sm font-bold transition-all ${fd.ratings[i]===v?"text-white scale-110 shadow-md":"bg-white border-2 border-slate-200 text-slate-500 hover:border-slate-400"}`}
+                  style={fd.ratings[i]===v?{backgroundColor:RC[v],borderColor:RC[v]}:{}}>{v}</button>
+              ))}
+              {fd.ratings[i]&&<span className="text-xs ml-1 font-semibold" style={{color:RC[fd.ratings[i]]}}>{RLBL[fd.ratings[i]]}</span>}
+            </div>
           </div>
         ))}</div>
       </div>,
+
       // 3 Gestor
       <div key={3} className="space-y-4">
         <div><h2 className="text-xl font-bold text-slate-800 mb-1">Avaliação do Gestor</h2><p className="text-slate-500 text-sm">Como você avalia seu gestor direto?</p></div>
@@ -300,6 +368,7 @@ export default function HRSystem() {
           </div>
         ))}</div>
       </div>,
+
       // 4 Abertas
       <div key={4} className="space-y-4">
         <div><h2 className="text-xl font-bold text-slate-800 mb-1">Suas Opiniões</h2><p className="text-slate-500 text-sm">Suas palavras são as mais valiosas para nós.</p></div>
@@ -308,10 +377,13 @@ export default function HRSystem() {
           {label:"Qual o principal problema que encontrou?",k:"ab3",ph:"Seja direto e honesto..."},
           {label:"Comentários adicionais ou sugestões:",k:"ab4",ph:"Qualquer outro ponto..."}
         ].map(({label,k,ph})=>(
-          <div key={k}><label className="text-xs font-bold text-slate-600 block mb-1.5">{label}</label>
-          <textarea className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none min-h-20" placeholder={ph} value={fd[k]} onChange={e=>up(k,e.target.value)}/></div>
+          <div key={k}>
+            <label className="text-xs font-bold text-slate-600 block mb-1.5">{label}</label>
+            <textarea className={INP+" resize-none min-h-20"} placeholder={ph} value={fd[k]} onChange={e=>up(k,e.target.value)}/>
+          </div>
         ))}
       </div>,
+
       // 5 Perspectiva
       <div key={5} className="space-y-5">
         <div><h2 className="text-xl font-bold text-slate-800 mb-1">Perspectiva Final</h2><p className="text-slate-500 text-sm">Sua visão nos ajuda a crescer.</p></div>
@@ -325,23 +397,28 @@ export default function HRSystem() {
           </div>
         ))}
       </div>,
+
       // 6 Confirmação
       <div key={6} className="space-y-4">
-        <div className="text-center py-2"><div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircle size={32} className="text-green-600"/></div>
-          <h2 className="text-2xl font-bold text-slate-800 mb-1">Tudo certo!</h2><p className="text-slate-500 text-sm">Revise e envie sua resposta.</p></div>
+        <div className="text-center py-2">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircle size={32} className="text-green-600"/></div>
+          <h2 className="text-2xl font-bold text-slate-800 mb-1">Tudo certo!</h2>
+          <p className="text-slate-500 text-sm">Revise e envie sua resposta.</p>
+        </div>
         <div className="bg-slate-50 rounded-2xl p-4 space-y-2.5 border border-slate-100">
-          {[["Identificação",anonimo?"Anônimo":fd.nome||"—"],["Unidade",fd.loja||"—"],["Tipo",fd.tipo||"—"],["Motivo",fd.motivo||"—"],
-            ["Avaliações 1-5",`${Object.keys(fd.ratings).length}/10`],["Avaliação gestor",`${Object.keys(fd.gestorAv).length}/10`]
-          ].map(([l,v])=>(
+          {[["Identificação",anonimo?"Anônimo":fd.nome||"—"],["Setor",fd.setor||"—"],["Unidade",fd.loja||"—"],["Tipo",fd.tipo+(fd.tipoOutros?" — "+fd.tipoOutros:"")||"—"],["Motivo",fd.motivo+(fd.motivoOutros?" — "+fd.motivoOutros:"")||"—"],["Avaliações 1-5",`${Object.keys(fd.ratings).length}/10`],["Avaliação gestor",`${Object.keys(fd.gestorAv).length}/10`]].map(([l,v])=>(
             <div key={l} className="flex justify-between text-sm"><span className="text-slate-500">{l}</span><span className="font-semibold text-slate-800 max-w-44 truncate text-right">{v}</span></div>
           ))}
         </div>
-        <button onClick={handleSubmit} className="w-full py-4 rounded-2xl font-bold text-white flex items-center justify-center gap-2 hover:opacity-90 shadow-lg" style={{background:"linear-gradient(135deg,#1B2A4A,#2E5C8A)"}}>
-          <CheckCircle size={18}/> Enviar Formulário
+        {submitError&&<div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700 text-center">{submitError}</div>}
+        <button onClick={handleSubmit} disabled={submitting}
+          className="w-full py-4 rounded-2xl font-bold text-white flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-60 shadow-lg transition-all"
+          style={{background:"linear-gradient(135deg,#1B2A4A,#2E5C8A)"}}>
+          {submitting?<><RefreshCw size={18} className="animate-spin"/> Enviando...</>:<><CheckCircle size={18}/> Enviar Formulário</>}
         </button>
-        <p className="text-center text-xs text-slate-400">{anonimo?"🔒 Sua identidade não será revelada":"Resposta vinculada ao seu nome"}</p>
       </div>
     ];
+
     return(
       <div className="min-h-screen bg-slate-50 flex flex-col">
         <div className="sticky top-0 z-10" style={{background:"linear-gradient(135deg,#1B2A4A,#2E5C8A)"}}>
@@ -422,8 +499,6 @@ export default function HRSystem() {
               <button onClick={loadSamples} className="bg-blue-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-800 text-sm flex items-center gap-2 mx-auto"><RefreshCw size={14}/> Carregar dados de exemplo</button>
             </div>
           )}
-
-          {/* EXECUTIVO */}
           {stats&&dashTab==="exec"&&(
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
@@ -452,7 +527,7 @@ export default function HRSystem() {
                 </div>
               </div>
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
-                <h3 className="font-bold text-slate-800 text-sm mb-3">Avaliação por Aspecto — média</h3>
+                <h3 className="font-bold text-slate-800 text-sm mb-3">Avaliação por Aspecto</h3>
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={stats.avgRatings} layout="vertical" margin={{left:10,right:35}}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false}/>
@@ -502,8 +577,6 @@ export default function HRSystem() {
               </div>
             </div>
           )}
-
-          {/* POR LOJA */}
           {stats&&dashTab==="stores"&&(
             <div className="space-y-4">
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
@@ -533,7 +606,7 @@ export default function HRSystem() {
                 <ResponsiveContainer width="100%" height={185}>
                   <BarChart data={stats.storeRanking.filter(s=>s.avgRating>0)} margin={{bottom:36}}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false}/>
-                    <XAxis dataKey="name" tick={{fontSize:8}} angle={-35} textAnchor="end" interval={0}/>
+                    <XAxis dataKey="name" tick={{fontSize:10}} interval={0}/>
                     <YAxis domain={[0,5]} tick={{fontSize:10}}/>
                     <Tooltip formatter={v=>[`${v}/5`,"Nota"]}/>
                     <Bar dataKey="avgRating" radius={[4,4,0,0]} name="Satisfação">{stats.storeRanking.map((s,i)=><Cell key={i} fill={s.avgRating<2.5?"#EF4444":s.avgRating<3.5?"#F59E0B":"#22C55E"}/>)}</Bar>
@@ -542,13 +615,11 @@ export default function HRSystem() {
               </div>
             </div>
           )}
-
-          {/* LIDERANÇA */}
           {stats&&dashTab==="gestor"&&(
             <div className="space-y-4">
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
                 <h3 className="font-bold text-slate-800 text-sm mb-1">Análise da Liderança</h3>
-                <p className="text-slate-400 text-xs mb-4">% de respostas "Sim" para cada aspecto do gestor</p>
+                <p className="text-slate-400 text-xs mb-4">% de respostas "Sim" por aspecto</p>
                 <div className="space-y-2.5">{stats.gestorData.sort((a,b)=>a.pct-b.pct).map(item=>(
                   <div key={item.fullName}>
                     <div className="flex justify-between text-xs mb-1"><span className="text-slate-600 truncate pr-2">{item.fullName}</span><span className={`font-bold flex-shrink-0 ${item.pct<40?"text-red-600":item.pct<65?"text-amber-600":"text-green-600"}`}>{item.pct}%</span></div>
@@ -568,25 +639,23 @@ export default function HRSystem() {
               </div>
               {stats.gestorData.filter(g=>g.pct<40&&g.total>=3).length>0&&(
                 <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
-                  <div className="font-bold text-red-700 text-sm flex items-center gap-2 mb-2"><AlertTriangle size={13}/> Pontos Críticos de Liderança</div>
-                  {stats.gestorData.filter(g=>g.pct<40&&g.total>=3).map(g=><div key={g.fullName} className="text-xs text-red-600 py-0.5">• {g.fullName}: apenas {g.pct}% ({g.total} respostas)</div>)}
+                  <div className="font-bold text-red-700 text-sm flex items-center gap-2 mb-2"><AlertTriangle size={13}/> Pontos Críticos</div>
+                  {stats.gestorData.filter(g=>g.pct<40&&g.total>=3).map(g=><div key={g.fullName} className="text-xs text-red-600 py-0.5">• {g.fullName}: {g.pct}% ({g.total} respostas)</div>)}
                 </div>
               )}
             </div>
           )}
-
-          {/* PLANO DE AÇÃO */}
           {dashTab==="actions"&&(
             <div className="space-y-4">
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
                 <div className="flex items-start gap-3 mb-4">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{background:"#1B2A4A"}}><Zap size={18} className="text-amber-400"/></div>
-                  <div><h3 className="font-bold text-slate-800 text-sm">Plano de Ação com IA</h3><p className="text-slate-400 text-xs">Gerado automaticamente com base nos dados de desligamento</p></div>
+                  <div><h3 className="font-bold text-slate-800 text-sm">Plano de Ação com IA</h3><p className="text-slate-400 text-xs">Gerado automaticamente com base nos dados</p></div>
                 </div>
                 {!stats?<div className="text-center py-8 text-slate-400 text-sm">Adicione respostas primeiro.</div>:(
                   <>
                     <button onClick={generateActionPlan} disabled={loadingAI} className="w-full py-3 rounded-xl font-bold text-white flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-60 mb-4" style={{background:"linear-gradient(135deg,#1B2A4A,#2E5C8A)"}}>
-                      {loadingAI?<><RefreshCw size={15} className="animate-spin"/> Gerando plano...</>:<><Zap size={15}/> Gerar Plano com IA</>}
+                      {loadingAI?<><RefreshCw size={15} className="animate-spin"/> Gerando...</>:<><Zap size={15}/> Gerar Plano com IA</>}
                     </button>
                     {actionPlan&&<div className="bg-slate-50 rounded-xl p-4 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed border border-slate-200">{actionPlan}</div>}
                     {!actionPlan&&!loadingAI&&stats.alerts.length>0&&(
