@@ -141,6 +141,7 @@ export default function HRSystem() {
   const [dbError,setDbError]       = useState(false);
   const [submitError,setSubmitError] = useState("");
   const [submitting,setSubmitting] = useState(false);
+  const [stepError,setStepError]   = useState("");
   const [dashAuth,setDashAuth]     = useState(false);
   const [dashPwd,setDashPwd]       = useState("");
   const [dashPwdError,setDashPwdError] = useState("");
@@ -159,6 +160,38 @@ export default function HRSystem() {
   const up  = (k,v) => setFd(p=>({...p,[k]:v}));
   const upR = (i,v) => setFd(p=>({...p,ratings:{...p.ratings,[i]:v}}));
   const upG = (i,v) => setFd(p=>({...p,gestorAv:{...p.gestorAv,[i]:v}}));
+
+
+  const validateStep = (s) => {
+    setStepError("");
+    if(s===0){
+      if(!anonimo && !fd.nome.trim()) return "Preencha seu nome completo.";
+      if(!fd.setor.trim()) return "Preencha o Setor / Unidade CD / Nome da Loja.";
+      if(!fd.loja) return "Selecione a Unidade.";
+      if(!fd.cargo.trim()) return "Preencha seu cargo.";
+      if(!fd.gestorNome.trim()) return "Preencha o nome do gestor.";
+    }
+    if(s===1){
+      if(!fd.tipo) return "Selecione o tipo de desligamento.";
+      if(fd.tipo==="Outros" && !fd.tipoOutros.trim()) return "Especifique o tipo de desligamento.";
+      if(!fd.motivo) return "Selecione o motivo principal.";
+      if(fd.motivo==="Outro" && !fd.motivoOutros.trim()) return "Especifique o motivo.";
+    }
+    if(s===2){
+      const missing = RATINGS.filter((_,i)=>!fd.ratings[i]);
+      if(missing.length>0) return `Avalie todos os ${RATINGS.length} aspectos antes de avançar.`;
+    }
+    if(s===3){
+      const missing = GESTOR_Q.filter((_,i)=>!fd.gestorAv[i]);
+      if(missing.length>0) return `Responda todas as ${GESTOR_Q.length} perguntas sobre o gestor.`;
+    }
+    // Etapa 4 (Suas Opiniões) é opcional
+    if(s===5){
+      if(!fd.voltaria) return "Responda se voltaria a trabalhar na empresa.";
+      if(!fd.recomendaria) return "Responda se recomendaria a empresa.";
+    }
+    return "";
+  };
 
   const handleSubmit = async()=>{
     setSubmitting(true);
@@ -486,9 +519,10 @@ export default function HRSystem() {
         </div>
         <div className="flex-1 overflow-auto px-4 py-6"><div className="max-w-lg mx-auto">{steps[step]}</div></div>
         <div className="bg-white border-t border-slate-200 px-4 py-4 sticky bottom-0">
-          <div className="max-w-lg mx-auto flex gap-3">
-            {step>0&&<button onClick={()=>setStep(s=>s-1)} className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-700 font-semibold flex items-center justify-center gap-1.5 hover:border-slate-300"><ChevronLeft size={16}/> Voltar</button>}
-            {step<STEPS-1&&<button onClick={()=>setStep(s=>s+1)} className="flex-1 py-3 rounded-xl font-bold text-white flex items-center justify-center gap-1.5 hover:opacity-90" style={{background:"linear-gradient(135deg,#1B2A4A,#2E5C8A)"}}>Avançar <ChevronRight size={16}/></button>}
+          {stepError&&<div className="max-w-lg mx-auto mb-2 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-sm text-red-600 text-center font-medium">{stepError}</div>}
+        <div className="max-w-lg mx-auto flex gap-3">
+            {step>0&&<button onClick={()=>{setStepError("");setStep(s=>s-1);}} className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-700 font-semibold flex items-center justify-center gap-1.5 hover:border-slate-300"><ChevronLeft size={16}/> Voltar</button>}
+            {step<STEPS-1&&<button onClick={()=>{const err=validateStep(step);if(err){setStepError(err);}else{setStepError("");setStep(s=>s+1);}}} className="flex-1 py-3 rounded-xl font-bold text-white flex items-center justify-center gap-1.5 hover:opacity-90" style={{background:"linear-gradient(135deg,#1B2A4A,#2E5C8A)"}}>Avançar <ChevronRight size={16}/></button>}
           </div>
         </div>
       </div>
