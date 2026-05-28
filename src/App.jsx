@@ -271,12 +271,7 @@ export default function HRSystem() {
               <div className="text-left"><div className="text-base">Responder Formulário</div><div className="text-xs font-normal opacity-70">Entrevista de desligamento</div></div>
             </div><ChevronRight size={18}/>
           </button>
-          <button onClick={()=>setView("dashlogin")}
-            className="w-full py-4 px-5 rounded-2xl font-bold text-white flex items-center justify-between border border-white/15 hover:bg-white/10 transition-colors">
-            <div className="flex items-center gap-3"><BarChart3 size={20}/>
-              <div className="text-left"><div className="text-base">Dashboard RH</div><div className="text-xs font-normal text-slate-400">Acesso exclusivo RH</div></div>
-            </div><ChevronRight size={18}/>
-          </button>
+
         </div>
         <div className="grid grid-cols-3 gap-4 text-center">
           {[[Shield,"Seguro","Dados protegidos"],[Eye,"Tempo real","Dashboard ao vivo"],[Zap,"IA integrada","Plano automático"]].map(([Icon,l,s])=>(
@@ -297,6 +292,9 @@ export default function HRSystem() {
         </div>
         {responses.length>0&&<div className="mt-4 text-center text-xs text-slate-700">{responses.length} resposta{responses.length>1?"s":""} registrada{responses.length>1?"s":""}</div>}
       </div>
+      <button onClick={()=>setView("dashlogin")} className="fixed bottom-4 left-4 w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-colors" title="RH">
+        <BarChart3 size={15} className="text-slate-600"/>
+      </button>
     </div>
   );
 
