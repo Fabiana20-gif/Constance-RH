@@ -141,6 +141,12 @@ export default function HRSystem() {
   const [dbError,setDbError]       = useState(false);
   const [submitError,setSubmitError] = useState("");
   const [submitting,setSubmitting] = useState(false);
+  const [dashAuth,setDashAuth]     = useState(false);
+  const [dashPwd,setDashPwd]       = useState("");
+  const [dashPwdError,setDashPwdError] = useState("");
+  const [showQR,setShowQR]         = useState(false);
+  const SITE_URL = "https://constance-rh.vercel.app";
+  const DASH_PASSWORD = "constance2025";
 
   useEffect(()=>{
     const unsub = onSnapshot(collection(db,"responses"),
@@ -232,10 +238,10 @@ export default function HRSystem() {
               <div className="text-left"><div className="text-base">Responder Formulário</div><div className="text-xs font-normal opacity-70">Entrevista de desligamento</div></div>
             </div><ChevronRight size={18}/>
           </button>
-          <button onClick={()=>setView("dashboard")}
+          <button onClick={()=>setView("dashlogin")}
             className="w-full py-4 px-5 rounded-2xl font-bold text-white flex items-center justify-between border border-white/15 hover:bg-white/10 transition-colors">
             <div className="flex items-center gap-3"><BarChart3 size={20}/>
-              <div className="text-left"><div className="text-base">Dashboard RH</div><div className="text-xs font-normal text-slate-400">Indicadores e análises</div></div>
+              <div className="text-left"><div className="text-base">Dashboard RH</div><div className="text-xs font-normal text-slate-400">Acesso exclusivo RH</div></div>
             </div><ChevronRight size={18}/>
           </button>
         </div>
@@ -244,7 +250,46 @@ export default function HRSystem() {
             <div key={l}><Icon size={16} className="mx-auto mb-1.5 text-amber-400/60"/><div className="text-xs font-medium text-slate-400">{l}</div><div className="text-xs text-slate-600">{s}</div></div>
           ))}
         </div>
-        {responses.length>0&&<div className="mt-5 text-center text-xs text-slate-700">{responses.length} resposta{responses.length>1?"s":""} registrada{responses.length>1?"s":""}</div>}
+        <div className="mt-6 border border-white/10 rounded-2xl p-4 text-center">
+          <div className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wide">Link para colaboradores</div>
+          <div className="bg-white/5 rounded-xl px-3 py-2 text-xs text-amber-300 font-mono mb-3 break-all">{SITE_URL}</div>
+          <button onClick={()=>setShowQR(!showQR)} className="text-xs text-slate-400 hover:text-white underline transition-colors">
+            {showQR?"Ocultar QR Code":"Ver QR Code para celular"}
+          </button>
+          {showQR&&(
+            <div className="mt-3 flex justify-center">
+              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(SITE_URL)}`} alt="QR Code" className="rounded-xl border-4 border-white"/>
+            </div>
+          )}
+        </div>
+        {responses.length>0&&<div className="mt-4 text-center text-xs text-slate-700">{responses.length} resposta{responses.length>1?"s":""} registrada{responses.length>1?"s":""}</div>}
+      </div>
+    </div>
+  );
+
+  // ── LOGIN DASHBOARD ──
+  if(view==="dashlogin") return(
+    <div className="min-h-screen flex items-center justify-center p-6" style={{background:"linear-gradient(160deg,#070E1C,#1B2A4A,#070E1C)"}}>
+      <div className="w-full max-w-xs">
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{background:"linear-gradient(135deg,#1B2A4A,#2E5C8A)"}}><Shield size={28} className="text-amber-400"/></div>
+          <h2 className="text-2xl font-bold text-white mb-1">Acesso RH</h2>
+          <p className="text-slate-500 text-sm">Digite a senha para acessar o dashboard</p>
+        </div>
+        <div className="space-y-3">
+          <input type="password" className="w-full border border-white/20 bg-white/5 rounded-xl px-4 py-3 text-white text-sm outline-none focus:ring-2 focus:ring-amber-400 placeholder-slate-500"
+            placeholder="Senha do RH" value={dashPwd}
+            onChange={e=>{setDashPwd(e.target.value);setDashPwdError("");}}
+            onKeyDown={e=>{if(e.key==="Enter"){if(dashPwd===DASH_PASSWORD){setDashAuth(true);setView("dashboard");setDashPwd("");}else{setDashPwdError("Senha incorreta.");}}}
+          }/>
+          {dashPwdError&&<div className="text-red-400 text-xs text-center">{dashPwdError}</div>}
+          <button onClick={()=>{if(dashPwd===DASH_PASSWORD){setDashAuth(true);setView("dashboard");setDashPwd("");}else{setDashPwdError("Senha incorreta.");}}}
+            className="w-full py-3 rounded-xl font-bold text-slate-900 hover:opacity-90 transition-opacity"
+            style={{background:"linear-gradient(135deg,#F59E0B,#D97706)"}}>
+            Entrar no Dashboard
+          </button>
+          <button onClick={()=>{setView("home");setDashPwd("");setDashPwdError("");}} className="w-full py-2 text-slate-500 text-sm hover:text-white transition-colors">Voltar</button>
+        </div>
       </div>
     </div>
   );
@@ -272,7 +317,7 @@ export default function HRSystem() {
           </div>
         )}
         <div>
-          <label className={lbl}>Setor</label>
+          <label className={lbl}>Setor / Unidade CD / Nome da Loja</label>
           <input className={INP} value={fd.setor} onChange={e=>up("setor",e.target.value)} placeholder="Ex: Vendas, Operações, Caixa..."/>
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -286,7 +331,7 @@ export default function HRSystem() {
           </div>
         </div>
         <div>
-          <label className={lbl}>Unidade / Loja</label>
+          <label className={lbl}>Unidade</label>
           <select className={INP+" bg-white"} value={fd.loja} onChange={e=>up("loja",e.target.value)}>
             <option value="">Selecione</option>
             {LOJAS.map(l=><option key={l}>{l}</option>)}
