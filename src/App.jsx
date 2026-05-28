@@ -562,7 +562,7 @@ export default function HRSystem() {
             </div>
           </div>
           <div className="flex px-3 gap-1 pb-2 overflow-x-auto">
-            {[["exec","Executivo"],["stores","Por Loja"],["gestor","Liderança"],["actions","Plano de Ação"]].map(([id,lbl])=>(
+            {[["exec","Executivo"],["stores","Unidade"],["gestor","Liderança"],["actions","Plano de Ação"]].map(([id,lbl])=>(
               <button key={id} onClick={()=>setDashTab(id)} className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${dashTab===id?"bg-amber-400 text-slate-900":"text-white/65 hover:text-white"}`}>{lbl}</button>
             ))}
           </div>
@@ -588,7 +588,7 @@ export default function HRSystem() {
                 {[{label:"Total Desligamentos",val:stats.n,sub:"respostas registradas",color:"#1B2A4A"},
                   {label:"Satisfação Média",val:`${stats.overallAvg}/5`,sub:"escala 1–5",color:stats.overallAvg<3?"#EF4444":stats.overallAvg<3.5?"#F59E0B":"#22C55E"},
                   {label:"Voltariam",val:`${stats.voltariaPct}%`,sub:"dos respondentes",color:"#2E5C8A"},
-                  {label:"Voluntários",val:`${Math.round(stats.voluntary/stats.n*100)}%`,sub:`${stats.voluntary} pedidos de demissão`,color:"#E8A020"}
+                  {label:"Recomendariam",val:`${stats.recomendariaPct}%`,sub:"dos respondentes",color:"#2E5C8A"}
                 ].map(({label,val,sub,color})=>(
                   <div key={label} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
                     <div className="text-xs text-slate-500 font-medium mb-2">{label}</div>
@@ -670,14 +670,16 @@ export default function HRSystem() {
                       <div className="flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600">{idx+1}</div><span className="font-semibold text-sm text-slate-800">{s.name}</span></div>
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${s.risk==="CRÍTICO"?"bg-red-100 text-red-600":s.risk==="ATENÇÃO"?"bg-amber-100 text-amber-700":s.risk==="BOM"?"bg-green-100 text-green-700":"bg-gray-100 text-gray-500"}`}>{s.risk}</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div><div className="text-lg font-bold text-slate-800">{s.total}</div><div className="text-xs text-slate-400">Desl.</div></div>
+                    <div className="grid grid-cols-4 gap-2 text-center">
+                      <div><div className="text-lg font-bold text-slate-800">{s.total}</div><div className="text-xs text-slate-400">Total</div></div>
                       <div><div className={`text-lg font-bold ${s.avgRating<3?"text-red-500":s.avgRating<4?"text-amber-500":"text-green-500"}`}>{s.avgRating||"—"}</div><div className="text-xs text-slate-400">Nota</div></div>
                       <div><div className="text-lg font-bold text-blue-700">{s.voluntary}</div><div className="text-xs text-slate-400">Voluntários</div></div>
+                      <div><div className="text-lg font-bold text-orange-500">{s.total-s.voluntary-(responses.filter(r=>r.loja===s.name&&r.tipo==="Desligamento pela empresa").length)}</div><div className="text-xs text-slate-400">Outros</div></div>
                     </div>
                     {expandedStore===s.name&&(
-                      <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2">
-                        <div className="bg-slate-50 rounded-lg p-2 text-center"><div className="text-xs text-slate-500 mb-0.5">% Voluntário</div><div className="font-bold text-blue-700">{s.total>0?Math.round(s.voluntary/s.total*100):0}%</div></div>
+                      <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-3 gap-2">
+                        <div className="bg-slate-50 rounded-lg p-2 text-center"><div className="text-xs text-slate-500 mb-0.5">% Voluntários</div><div className="font-bold text-blue-700">{s.total>0?Math.round(s.voluntary/s.total*100):0}%</div></div>
+                        <div className="bg-slate-50 rounded-lg p-2 text-center"><div className="text-xs text-slate-500 mb-0.5">Involuntários</div><div className="font-bold text-orange-600">{responses.filter(r=>r.loja===s.name&&r.tipo==="Desligamento pela empresa").length}</div></div>
                         <div className="bg-slate-50 rounded-lg p-2 text-center"><div className="text-xs text-slate-500 mb-0.5">Risco</div><div className={`font-bold text-sm ${s.risk==="CRÍTICO"?"text-red-600":s.risk==="ATENÇÃO"?"text-amber-600":"text-green-600"}`}>{s.risk}</div></div>
                       </div>
                     )}
